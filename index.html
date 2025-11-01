@@ -1,32 +1,79 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<body onload="getLocation()">
+<head>
+  <meta charset="utf-8" />
+  <title>Share Location (consent required)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style> body{font-family:system-ui;padding:1rem} pre{background:#f6f8fa;padding:10px;border-radius:6px} </style>
+</head>
+<body>
+  <h2>Share your location (consent required)</h2>
+  <p>This page will ask your permission to read your device location. Only click "Allow" if you consent.</p>
 
-<h2>Your current location:</h2>
-<p id="demo">Waiting...</p>
+  <div id="status">Waiting...</div>
+  <pre id="output"></pre>
 
-<script>
-var x = document.getElementById("demo");
+  <script>
+    const out = document.getElementById('output');
+    const status = document.getElementById('status');
 
-function getLocation() {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(showPosition, showError);
-  } else {
-    x.innerHTML = "Geolocation not supported by this browser.";
-  }
-}
+    async function sendToServer(obj){
+      try{
+        // Replace with your server URL when deployed, example: https://yourdomain.com/receive
+        const RECEIVE = "/receive";
+        await fetch(RECEIVE, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(obj)
+        });
+      } catch(e){
+        console.error("Failed to POST:", e);
+      }
+    }
 
-function showPosition(position) {
-  x.innerHTML =
-    "Latitude: " + position.coords.latitude + "<br>" +
-    "Longitude: " + position.coords.longitude + "<br>" +
-    "Altitude: " + position.coords.altitude;
-}
+    function display(visible){
+      out.textContent = JSON.stringify(visible, null, 2);
+    }
 
-function showError(error) {
-  x.innerHTML = "Error getting location: " + error.message;
-}
-</script>
+    function success(position){
+      const coords = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        altitude: position.coords.altitude,              // may be null on some devices
+        accuracy_m: position.coords.accuracy,
+        altitude_accuracy_m: position.coords.altitudeAccuracy,
+        heading: position.coords.heading,
+        speed: position.coords.speed,
+        timestamp: new Date(position.timestamp).toISOString(),
+        ua: navigator.userAgent,
+        origin: location.href
+      };
 
+      status.textContent = "Location obtained. Sending to server (if configured).";
+      // show only lat/lon to the user (optional) while sending full payload
+      display({ latitude: coords.latitude, longitude: coords.longitude, accuracy_m: coords.accuracy_m });
+      // send full data to server (consent required)
+      sendToServer(coords);
+      // store locally in case you want to re-send
+      window._lastCoords = coords;
+    }
+
+    function error(err){
+      status.textContent = "Error: " + err.message;
+      out.textContent = `Error code ${err.code}\n${err.message}`;
+    }
+
+    function getLocation(){
+      if (!navigator.geolocation){
+        status.textContent = "Geolocation not supported by this browser.";
+        return;
+      }
+      status.textContent = "Requesting permission...";
+      navigator.geolocation.getCurrentPosition(success, error, {enableHighAccuracy:true, timeout:15000});
+    }
+
+    // initiate on load (or call getLocation() from a button if you prefer)
+    window.onload = getLocation;
+  </script>
 </body>
 </html>
